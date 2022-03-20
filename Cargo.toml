@@ -1,0 +1,12 @@
+[package]
+name = "conflagrate"
+version = "0.0.1"
+authors = ["Jeffrey Bouas <ignirtoq@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = ">=0.1.52"
+conflagrate-macros = { version = "=0.0.1", path = "./macros" }
+tokio = { version = "1", features = ["full"] }
