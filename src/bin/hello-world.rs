@@ -7,7 +7,7 @@ fn StartNodeType() -> String {
     name
 }
 
-#[conflagrate::nodetype]
+#[conflagrate::nodetype(NONBLOCKING)]
 fn GreetingNodeType(name: String) {
     println!("Welcome {}!", name)
 }

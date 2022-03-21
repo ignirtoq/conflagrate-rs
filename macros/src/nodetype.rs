@@ -1,6 +1,6 @@
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{FnArg, ItemFn, Pat, ReturnType, Type};
+use syn::{Block, FnArg, ItemFn, Pat, ReturnType, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 
@@ -53,13 +53,31 @@ fn output_to_output_type(
     }
 }
 
-pub fn nodetype_impl(func_ast: ItemFn) -> TokenStream2 {
+fn determine_if_blocking(args: TokenStream) -> bool {
+    if args.to_string() == "NONBLOCKING" {false} else {true}
+}
+
+pub fn create_codeblock(is_blocking: bool, code: &Box<Block>) -> TokenStream {
+    if is_blocking {
+        quote! {
+        {
+            tokio::task::spawn_blocking(move ||
+                #code
+            ).await.unwrap()
+        }}
+    } else {
+        quote!{#code}
+    }
+}
+
+pub fn nodetype_impl(args: TokenStream, func_ast: ItemFn) -> TokenStream2 {
+    let is_blocking = determine_if_blocking(args);
     let name = &func_ast.sig.ident;
     let inputs = &func_ast.sig.inputs;
     let input_type = inputs_to_tuple_type(&inputs);
     let input_names = inputs_to_names(&inputs);
     let output = output_to_output_type(&func_ast.sig.output);
-    let code = func_ast.block;
+    let code = create_codeblock(is_blocking, &func_ast.block);
     quote! {
         struct #name {}
         #[async_trait::async_trait]

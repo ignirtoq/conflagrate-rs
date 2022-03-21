@@ -9,17 +9,17 @@ fn Greeting() -> (String, ()) {
     (choice, ())
 }
 
-#[nodetype]
+#[nodetype(NONBLOCKING)]
 fn Option1() {
     println!("You chose option 1");
 }
 
-#[nodetype]
+#[nodetype(NONBLOCKING)]
 fn Option2() {
     println!("You chose option 2");
 }
 
-#[nodetype]
+#[nodetype(NONBLOCKING)]
 fn DefaultOption() {
     println!("Whoops!  Unexpected input.");
 }
