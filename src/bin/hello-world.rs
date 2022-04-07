@@ -9,8 +9,8 @@ pub fn StartNodeType() -> String {
     name
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn GreetingNodeType(name: String) {
+#[nodetype]
+pub async fn GreetingNodeType(name: String) {
     println!("Welcome {}!", name)
 }
 

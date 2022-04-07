@@ -1,6 +1,6 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{Block, FnArg, ItemFn, Pat, PatType, ReturnType, Type};
+use syn::{Block, FnArg, Ident, ItemFn, Pat, PatType, ReturnType, Type};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 
@@ -66,8 +66,11 @@ fn output_to_output_type(
     }
 }
 
-fn determine_if_blocking(args: TokenStream) -> bool {
-    if args.to_string() == "NONBLOCKING" {false} else {true}
+fn determine_if_blocking(func_ast: &ItemFn) -> bool {
+    match func_ast.sig.asyncness {
+        Some(_) => false,
+        None => true,
+    }
 }
 
 fn create_codeblock(is_blocking: bool, deps: Vec<PatType>, code: &Box<Block>) -> TokenStream {
@@ -100,8 +103,14 @@ fn combine_dep_injection_with_node_code(deps: Vec<PatType>, code: &Box<Block>) -
     block
 }
 
-pub fn nodetype_impl(args: TokenStream, func_ast: ItemFn) -> TokenStream {
-    let is_blocking = determine_if_blocking(args);
+fn create_test_method(func_ast: &ItemFn) -> ItemFn {
+    let mut test_method = func_ast.clone();
+    test_method.sig.ident = Ident::new("test", Span::call_site());
+    test_method
+}
+
+pub fn nodetype_impl(func_ast: ItemFn) -> TokenStream {
+    let is_blocking = determine_if_blocking(&func_ast);
     let vis = &func_ast.vis;
     let name = &func_ast.sig.ident;
     let inputs = &func_ast.sig.inputs;
@@ -109,6 +118,7 @@ pub fn nodetype_impl(args: TokenStream, func_ast: ItemFn) -> TokenStream {
     let input_names = inputs_to_names(&inputs);
     let output = output_to_output_type(&func_ast.sig.output);
     let code = create_codeblock(is_blocking, deps, &func_ast.block);
+    let test_method = create_test_method(&func_ast);
     quote! {
         #vis struct #name {}
         #[async_trait::async_trait]
@@ -117,6 +127,9 @@ pub fn nodetype_impl(args: TokenStream, func_ast: ItemFn) -> TokenStream {
             type ReturnType = #output;
             async fn run((#input_names): Self::Args, _deps: &conflagrate::DependencyCache) -> Self::ReturnType
             #code
+        }
+        impl #name {
+           #test_method
         }
     }
 }

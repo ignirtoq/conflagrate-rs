@@ -9,18 +9,18 @@ pub fn Greeting() -> (String, ()) {
     (choice, ())
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn Option1() {
+#[nodetype]
+pub async fn Option1() {
     println!("You chose option 1");
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn Option2() {
+#[nodetype]
+pub async fn Option2() {
     println!("You chose option 2");
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn DefaultOption() {
+#[nodetype]
+pub async fn DefaultOption() {
     println!("Whoops!  Unexpected input.");
 }
 

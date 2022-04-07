@@ -20,23 +20,23 @@ async fn port(config: &Config) -> u16 {
     config.port
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn Start() -> String {
+#[nodetype]
+pub async fn Start() -> String {
     String::from("Hello")
 }
 
-#[nodetype(NONBLOCKING)]
-fn PrintName(greeting: String, name: &String) {
+#[nodetype]
+async fn PrintName(greeting: String, name: &String) {
     println!("{}, {}!", greeting, name);
 }
 
-#[nodetype(NONBLOCKING)]
-fn PrintPort(greeting: String, port: &u16) {
+#[nodetype]
+async fn PrintPort(greeting: String, port: &u16) {
     println!("{}! Coming to you live from port {}!", greeting, port);
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn End() {}
+#[nodetype]
+pub async fn End() {}
 
 graph!{
 

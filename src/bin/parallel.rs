@@ -9,12 +9,12 @@ pub fn StartNodeType() -> String {
     name
 }
 
-#[nodetype(NONBLOCKING)]
-pub fn FirstGreeting(name: String) {
+#[nodetype]
+pub async fn FirstGreeting(name: String) {
     println!("Welcome {}!", name);
 }
 
-#[nodetype(NONBLOCKING)]
+#[nodetype]
 pub async fn SecondGreeting(_: String) {
     println!("This is a control flow graph based application.");
 }

@@ -7,7 +7,6 @@ use crate::dependency::dependency_impl;
 use crate::graph::graph_impl;
 use crate::nodetype::nodetype_impl;
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
 use syn::{parse_macro_input, ItemFn};
 
 
@@ -17,9 +16,9 @@ pub fn dependency(_: TokenStream, func: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn nodetype(args: TokenStream, func: TokenStream) -> TokenStream {
+pub fn nodetype(_: TokenStream, func: TokenStream) -> TokenStream {
     TokenStream::from(
-        nodetype_impl(TokenStream2::from(args), parse_macro_input!(func as ItemFn))
+        nodetype_impl(parse_macro_input!(func as ItemFn))
     )
 }
 

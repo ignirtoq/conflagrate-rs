@@ -34,17 +34,17 @@ mod dependencies;
 ///     Mutex::<Vec<String>>::new(Vec::<String>::new())
 /// }
 ///
-/// #[nodetype(NONBLOCKING)]
+/// #[nodetype]
 /// pub async fn StoreMessage(messages: &Mutex<Vec<String>>) {
 ///     messages.lock().await.push(String::from("Hello mutable storage!"));
 /// }
 ///
-/// #[nodetype(NONBLOCKING)]
+/// #[nodetype]
 /// async fn StoreAnotherMessage(messages: &Mutex<Vec<String>>) {
 ///     messages.lock().await.push(String::from("Here's another message!"));
 /// }
 ///
-/// #[nodetype(NONBLOCKING)]
+/// #[nodetype]
 /// pub async fn PrintMessages(messages: &Mutex<Vec<String>>) {
 ///     for msg in messages.lock().await.iter() {
 ///         println!("{}", msg);
@@ -132,10 +132,10 @@ pub use conflagrate_macros::graph;
 ///
 /// # Blocking Versus Non-Blocking
 ///
-/// Conflagrate applications are built using `tokio`, so the implementations of nodes are as async
-/// functions.  Since regular functions may be blocking, conflagrate assumes the function passed
-/// into the macro is `fn` and thus blocking.  To use an async function, pass the argument
-/// `NONBLOCKING`.
+/// Conflagrate applications are built using `tokio`, so `nodetype`s are converted to async
+/// functions.  If a regular function is passed into the `nodetype` macro, conflagrate assumes
+/// it is blocking and spawns its codeblock in a separate thread.  To avoid spawning extra
+/// threads, use `async fn` wherever possible.
 ///
 /// # Visibility (Public Versus Private)
 ///
@@ -143,6 +143,41 @@ pub use conflagrate_macros::graph;
 /// of [`graph`]s are `pub`.  The arguments to the graph are the input arguments to the first node,
 /// and the return value of the graph is the return value of the last possible node, so
 /// consequently the `nodetype` functions of those nodes must also be `pub`.
+///
+/// # Testing
+///
+/// Under the hood, the `nodetype` function is converted to a struct implementing a trait that
+/// provides the function with a uniform call signature so that when it's used with the [`graph`]
+/// macro, the graph builder doesn't need to know anything about the shape of your function.  This
+/// makes testing more difficult, so your original function is also provided as a `test` method.
+/// The `test` method has exactly the same call signature as your original function.
+///
+/// ```
+/// # use conflagrate::{nodetype};
+/// #[nodetype]
+/// async fn BusinessLogic(value: u32) -> Result<String, String> {
+///     match value {
+///         0..=10 => Ok(String::from("good")),
+///         _ => Err(String::from("too high!"))
+///     }
+/// }
+///
+/// #[cfg(test)]
+/// mod tests {
+///     # use std::assert_eq;
+///     # use super::BusinessLogic;
+///     #[test]
+///     fn handles_good_values() {
+///         assert_eq!(BusinessLogic::test(1), Ok(String::from("good")));
+///         assert_eq!(BusinessLogic::test(10), Ok(String::from("good")));
+///     }
+///
+///     #[test]
+///     fn bails_on_bad_values() {
+///         assert_eq!(BusinessLogic::test(100), Err(String::from("too high!")));
+///     }
+/// }
+/// ```
 ///
 /// # Examples
 /// ```no_run
@@ -157,7 +192,7 @@ pub use conflagrate_macros::graph;
 ///    name
 /// }
 ///
-/// #[nodetype(NONBLOCKING)]
+/// #[nodetype]
 /// pub fn PrintGreeting(name: String) {
 ///     println!("Hello, {}!", name)
 /// }
@@ -187,12 +222,4 @@ pub trait NodeType {
     type Args: Clone;
     type ReturnType;
     async fn run(args: Self::Args, deps: &DependencyCache) -> Self::ReturnType;
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        println!("it works!")
-    }
 }
