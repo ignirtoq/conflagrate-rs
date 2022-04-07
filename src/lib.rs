@@ -1,3 +1,22 @@
+//! Conflagrate is a framework for building applications from control flow graphs, instead of
+//! the other way around.
+//!
+//! Conflagrate is intended to bring modularity, maintainability, and extensibility to control flow
+//! logic.  Where object oriented design, functional programming, dependency injection, and similar
+//! tools help developers build and reuse functionality, conflagrate helps developers to encapsulate
+//! that functionality in modular, testable building blocks that can be arranged and rearranged to
+//! construct a complete application.  Importantly, this application can be easily updated to change
+//! the order of operations, conditions of branch execution, or even to add entirely new subsystems
+//! without needing to refactor the existing components or control flow.
+//!
+//! The control flow graph is defined with the [`graph`] macro, which converts your graph as
+//! defined with the [DOT language](https://graphviz.org) into an executable structure.  Each
+//! node in graph is annotated with a [`nodetype`] that associates a block of code with the node.
+//! Finally, sometimes a node needs more to do its job than just the output of the previous node
+//! in the graph.  Conflagrate provides a simple dependency injection system to provide external
+//! resources and data.  Define a dependency provider function with the [`dependency`] macro and
+//! add a reference to the dependency to the [`nodetype`] function signature.
+
 mod branchtracker;
 mod dependencies;
 
@@ -53,12 +72,11 @@ mod dependencies;
 ///
 /// graph!{
 ///     digraph MessageGraph {
-///         Store[type=StoreMessage, start=true];
-///         StoreAnother[type=StoreAnotherMessage];
-///         Print[type=PrintMessages];
+///         store[type=StoreMessage, start=true];
+///         store_another[type=StoreAnotherMessage];
+///         print[type=PrintMessages];
 ///
-///         Store -> StoreAnother;
-///         StoreAnother -> Print;
+///         store -> store_another -> print;
 ///     }
 /// }
 ///
@@ -66,6 +84,10 @@ mod dependencies;
 ///     MessageGraph::run(());
 /// }
 /// ```
+///
+/// # See Also
+/// * [`nodetype`] -- Macro for associating a function with a type of node.  Reference types in
+/// input arguments are interpreted to be dependencies.
 pub use conflagrate_macros::dependency;
 
 /// Defines the control flow graph of an application.
@@ -100,10 +122,12 @@ pub use conflagrate_macros::dependency;
 /// followed to determine the next node to be executed in the graph.
 ///
 /// # Examples
-/// ## Trivial Graph
-/// ```
-/// use conflagrate::{graph, nodetype};
 ///
+/// ## Trivial Graph
+///
+/// A single-node graph that just prints the text `Hello, world!`.
+/// ```
+/// # use conflagrate::{graph, nodetype};
 /// #[nodetype]
 /// pub fn HelloWorld() {
 ///     println!("Hello, world!");
@@ -119,6 +143,50 @@ pub use conflagrate_macros::dependency;
 ///     Graph::run(());
 /// }
 /// ```
+///
+/// ## Simple Loop
+///
+/// A simple loop that asks the user if they wish to exit (type `yes` to exit).
+/// ```no_run
+/// # use conflagrate::{graph, nodetype};
+/// #[nodetype]
+/// pub fn AskExit() -> (String, ()) {
+///     let mut response = String::new();
+///     println!("Exit loop?");
+///     std::io::stdin().read_line(&mut response).unwrap();
+///     response.truncate(response.len() - 1);
+///     (response, ())
+/// }
+///
+/// #[nodetype]
+/// pub async fn DoNothing() {}
+///
+/// graph!{
+///     digraph Loop {
+///         ask_exit[type=AskExit, branch=matcher, start=true];
+///         end[type=DoNothing];
+///
+///         ask_exit -> end [value=yes];
+///         ask_exit -> ask_exit;
+///     }
+/// }
+///
+/// fn main() {
+///     Loop::run(())
+/// }
+/// ```
+///
+/// This graph makes use of the `matcher` branching logic.  The `ask_exit` node has two tails,
+/// one that goes to the `end` node with the `value=yes` attribute, and another that goes back to
+/// the `ask_exit` node with no attributes.  The matching logic chooses which trailing node to
+/// execute next based on the first element in the tuple output from the `AskExit` nodetype
+/// function.  The second element of the tuple is then passed as input to the chosen following node.
+///
+/// # See Also
+///
+/// * [`nodetype`] -- Macro associating functions with nodes.
+/// * [`dependency`] -- Macro associating a function providing a resource with the name of the
+/// function, providing that resource to `nodetype`s that reference them.
 pub use conflagrate_macros::graph;
 
 /// Defines a block of code to be associated with nodes of a certain type in a graph.
@@ -150,7 +218,7 @@ pub use conflagrate_macros::graph;
 /// provides the function with a uniform call signature so that when it's used with the [`graph`]
 /// macro, the graph builder doesn't need to know anything about the shape of your function.  This
 /// makes testing more difficult, so your original function is also provided as a `test` method.
-/// The `test` method has exactly the same call signature as your original function.
+/// The `test` method has exactly the same call signature as the original definition.
 ///
 /// ```
 /// # use conflagrate::{nodetype};
@@ -181,8 +249,7 @@ pub use conflagrate_macros::graph;
 ///
 /// # Examples
 /// ```no_run
-/// use conflagrate::{graph, nodetype};
-///
+/// # use conflagrate::{graph, nodetype};
 /// #[nodetype]
 /// pub fn GetName() -> String {
 ///    let mut name = String::new();
@@ -210,6 +277,11 @@ pub use conflagrate_macros::graph;
 ///     GreetingGraph::run(());
 /// }
 /// ```
+///
+/// # See Also
+/// * [`dependency`] -- Macro for defining an external resource or data to be used as input by a
+/// node in addition to the output of the previous node.
+/// * [`graph`] -- Macro for building an executable control flow graph using `nodetype`s.
 pub use conflagrate_macros::nodetype;
 #[doc(hidden)]
 pub use branchtracker::BranchTracker;
