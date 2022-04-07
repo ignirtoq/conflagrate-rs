@@ -83,7 +83,13 @@ impl Graph {
     fn process_edge(&mut self, edge: &GvEdge) {
         match &edge.ty {
             EdgeTy::Pair(src, dest) => self.process_edge_pair(src, dest, &edge.attributes),
-            _ => {}
+            EdgeTy::Chain(vertices) => self.process_edge_chain(vertices, &edge.attributes)
+        }
+    }
+
+    fn process_edge_chain(&mut self, vertices: &Vec<Vertex>, attrs: &Vec<Attribute>) {
+        for i in 1..=vertices.len()-1 {
+            self.process_edge_pair(&vertices[i-1], &vertices[i], attrs);
         }
     }
 
