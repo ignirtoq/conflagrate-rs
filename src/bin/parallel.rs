@@ -1,7 +1,7 @@
 use conflagrate::{graph, nodetype};
 
 #[nodetype]
-fn StartNodeType() -> String {
+pub fn StartNodeType() -> String {
     let mut name = String::new();
     println!("Hello, what is your name?");
     std::io::stdin().read_line(&mut name).unwrap();
@@ -10,12 +10,12 @@ fn StartNodeType() -> String {
 }
 
 #[nodetype(NONBLOCKING)]
-fn FirstGreeting(name: String) {
+pub fn FirstGreeting(name: String) {
     println!("Welcome {}!", name);
 }
 
 #[nodetype(NONBLOCKING)]
-async fn SecondGreeting(_: String) {
+pub async fn SecondGreeting(_: String) {
     println!("This is a control flow graph based application.");
 }
 

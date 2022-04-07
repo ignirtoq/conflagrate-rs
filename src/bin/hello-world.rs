@@ -1,5 +1,7 @@
-#[conflagrate::nodetype]
-fn StartNodeType() -> String {
+use conflagrate::{graph, nodetype};
+
+#[nodetype]
+pub fn StartNodeType() -> String {
     let mut name = String::new();
     println!("Hello, what is your name?");
     std::io::stdin().read_line(&mut name).unwrap();
@@ -7,12 +9,12 @@ fn StartNodeType() -> String {
     name
 }
 
-#[conflagrate::nodetype(NONBLOCKING)]
-fn GreetingNodeType(name: String) {
+#[nodetype(NONBLOCKING)]
+pub fn GreetingNodeType(name: String) {
     println!("Welcome {}!", name)
 }
 
-conflagrate::graph!{
+graph!{
 
 strict digraph {
   start[label="Get Name", type=StartNodeType, start=true]

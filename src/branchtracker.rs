@@ -28,13 +28,10 @@ impl<T> BranchTracker<T> {
         self.num_branches.fetch_add(-1, Relaxed);
         if self.num_branches.load(Relaxed) <= 0 {
             self.done.store(true, Relaxed);
-            match self.sender.take() {
-                Option::Some(sender) => {
-                    match sender.send(last_node_output) {
-                        _ => {}
-                    }
-                },
-                _ => {}
+            if let Some(sender) = self.sender.take() {
+                match sender.send(last_node_output) {
+                    _ => {}
+                }
             }
         }
     }

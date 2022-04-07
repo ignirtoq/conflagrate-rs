@@ -32,8 +32,9 @@ trait BaseNode {
             {
                 let bclone = branchtracker.clone();
                 let oclone = output.clone();
+                let dclone = std::sync::Arc::clone(&deps);
                 tokio::spawn(async move {
-                    Self::#execute_node(bclone, oclone).await;
+                    Self::#execute_node(bclone, oclone, dclone).await;
                 });
             }
         }
@@ -96,9 +97,10 @@ impl BaseNode for Node {
         quote!{
             async fn #execute_node(
                 branchtracker: std::sync::Arc<tokio::sync::Mutex<conflagrate::BranchTracker<#graph_output_type>>>,
-                node_args: <#node_type as conflagrate::NodeType>::Args
+                node_args: <#node_type as conflagrate::NodeType>::Args,
+                deps: std::sync::Arc<conflagrate::DependencyCache>
             ) {
-                let output = <#node_type as conflagrate::NodeType>::run(node_args).await;
+                let output = <#node_type as conflagrate::NodeType>::run(node_args, &deps).await;
                 #spawn_blocks
             }
         }
@@ -152,9 +154,10 @@ impl BaseNode for MatcherNode {
         quote!{
             async fn #execute_node(
                 branchtracker: std::sync::Arc<tokio::sync::Mutex<conflagrate::BranchTracker<#graph_output_type>>>,
-                node_args: <#node_type as conflagrate::NodeType>::Args
+                node_args: <#node_type as conflagrate::NodeType>::Args,
+                deps: std::sync::Arc<conflagrate::DependencyCache>
             ) {
-                let (value, output) = <#node_type as conflagrate::NodeType>::run(node_args).await;
+                let (value, output) = <#node_type as conflagrate::NodeType>::run(node_args, &deps).await;
                 #spawn_blocks
             }
         }

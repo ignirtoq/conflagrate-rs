@@ -1,7 +1,7 @@
 use conflagrate::{graph, nodetype};
 
 #[nodetype]
-fn Greeting() -> (String, ()) {
+pub fn Greeting() -> (String, ()) {
     let mut choice = String::new();
     println!("Pick a path (1 or 2):");
     std::io::stdin().read_line(&mut choice).unwrap();
@@ -10,17 +10,17 @@ fn Greeting() -> (String, ()) {
 }
 
 #[nodetype(NONBLOCKING)]
-fn Option1() {
+pub fn Option1() {
     println!("You chose option 1");
 }
 
 #[nodetype(NONBLOCKING)]
-fn Option2() {
+pub fn Option2() {
     println!("You chose option 2");
 }
 
 #[nodetype(NONBLOCKING)]
-fn DefaultOption() {
+pub fn DefaultOption() {
     println!("Whoops!  Unexpected input.");
 }
 

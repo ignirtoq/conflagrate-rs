@@ -151,28 +151,33 @@ impl ToTokens for Graph {
         let execute_node_blocks = self.get_execute_node_blocks();
         tokens.extend(quote! {
 
-struct #graph_name{}
+pub struct #graph_name{}
 impl #graph_name {
-    fn run(
+    pub fn run(
         first_node_args: <#start_node_nodetype as conflagrate::NodeType>::Args
     ) {
         let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            Self::run_graph(first_node_args).await;
-        });
-    }
-
-    async fn run_graph(
-        first_node_args: <#start_node_nodetype as conflagrate::NodeType>::Args
-    ) {
-        let (receiver, raw_branch_tracker) = conflagrate::BranchTracker::<#graph_output_type>::new();
-        let branch_tracker = std::sync::Arc::new(tokio::sync::Mutex::new(raw_branch_tracker));
-        tokio::spawn(async move {
-            Self::#execute_start_node(branch_tracker, first_node_args).await;
-        });
-        match receiver.await {
+        match rt.block_on(async move {
+            Self::run_graph(first_node_args, None).await
+        }) {
             _ => {}
         };
+    }
+
+    pub async fn run_graph(
+        first_node_args: <#start_node_nodetype as conflagrate::NodeType>::Args,
+        dependency_cache: Option<std::sync::Arc<conflagrate::DependencyCache>>
+    ) -> Result<#graph_output_type, tokio::sync::oneshot::error::RecvError>{
+        let (receiver, raw_branch_tracker) = conflagrate::BranchTracker::<#graph_output_type>::new();
+        let branch_tracker = std::sync::Arc::new(tokio::sync::Mutex::new(raw_branch_tracker));
+        let deps = match dependency_cache {
+            Some(deps) => deps,
+            None => std::sync::Arc::new(conflagrate::DependencyCache::new()),
+        };
+        tokio::spawn(async move {
+            Self::#execute_start_node(branch_tracker, first_node_args, deps).await;
+        });
+        receiver.await
     }
 
     #execute_node_blocks
