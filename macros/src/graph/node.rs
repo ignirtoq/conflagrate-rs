@@ -95,6 +95,7 @@ impl BaseNode for Node {
         let execute_node = self.get_execute_ident();
         let spawn_blocks = self.create_spawn_blocks();
         quote!{
+            #[async_recursion::async_recursion]
             async fn #execute_node(
                 branchtracker: std::sync::Arc<tokio::sync::Mutex<conflagrate::BranchTracker<#graph_output_type>>>,
                 node_args: <#node_type as conflagrate::NodeType>::Args,
@@ -152,6 +153,7 @@ impl BaseNode for MatcherNode {
         let execute_node = self.get_execute_ident();
         let spawn_blocks = self.create_spawn_blocks();
         quote!{
+            #[async_recursion::async_recursion]
             async fn #execute_node(
                 branchtracker: std::sync::Arc<tokio::sync::Mutex<conflagrate::BranchTracker<#graph_output_type>>>,
                 node_args: <#node_type as conflagrate::NodeType>::Args,
