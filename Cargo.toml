@@ -8,7 +8,7 @@ documentation = "https://docs.rs/conflagrate"
 readme = "README.md"
 repository = "https://github.com/ignirtoq/conflagrate-rs"
 license = "MIT"
-keywords = ["graph", "control flow graph", "dependency injection"]
+keywords = ["graph", "control-flow-graph", "dependency-injection"]
 categories = ["development-tools"]
 exclude = ["/src/bin/**"]
 
