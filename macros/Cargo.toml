@@ -3,6 +3,10 @@ name = "conflagrate-macros"
 version = "0.0.1"
 authors = ["Jeffrey Bouas <ignirtoq@gmail.com>"]
 edition = "2018"
+description = "Macros for conflagrate"
+readme = "../README.md"
+repository = "https://github.com/ignirtoq/conflagrate-rs"
+license = "MIT"
 
 [lib]
 proc-macro = true
@@ -12,4 +16,4 @@ dot-structures = ">=0.1.0"
 graphviz-rust = ">=0.2.0"
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
-syn = { version = "1.0", features = ["extra-traits", "full"] }
+syn = { version = "1.0", features = ["full"] }

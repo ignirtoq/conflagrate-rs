@@ -8,15 +8,12 @@ documentation = "https://docs.rs/conflagrate"
 readme = "README.md"
 repository = "https://github.com/ignirtoq/conflagrate-rs"
 license = "MIT"
-license-file = "LICENSE"
 keywords = ["graph", "control flow graph", "dependency injection"]
 categories = ["development-tools"]
 exclude = ["/src/bin/**"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-recursion = "1.0.0"
 async-trait = ">=0.1.52"
 conflagrate-macros = { version = "=0.0.1", path = "./macros" }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync"] }
