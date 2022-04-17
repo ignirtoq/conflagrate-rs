@@ -1,111 +1,18 @@
 use std::collections::HashMap;
-use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
+use proc_macro2::Ident;
+use quote::format_ident;
 
-const DEFAULT_MATCH_VALUE: &str = "";
-const NODE_BRANCH_MATCHER_VAL: &str = "matcher";
+const NODE_BRANCH_MATCHER_VAL: &'static str = "matcher";
+const NODE_BRANCH_RESULT_MATCHER_VAL: &'static str = "resultmatcher";
 
-fn branchtracker_add_branch() -> TokenStream {
-    quote! {
-        branchtracker.lock().await.add_branch();
-    }
-}
+const RESULT_MATCHER_OK_VAL: &'static str = "ok";
+const RESULT_MATCHER_ERR_VAL: &'static str = "err";
 
-fn branchtracker_remove_branch() -> TokenStream {
-    quote! {
-        branchtracker.lock().await.remove_branch(output);
-    }
-}
-
-trait BaseNode {
-    fn get_name(&self) -> &String;
-
-    fn get_nodetype(&self) -> &String;
-
-    fn is_terminating_node(&self) -> bool;
-
-    fn create_tail(&self) -> TokenStream;
-
-    fn create_spawn_block(next_node_name: &String) -> TokenStream {
-        let execute_node = format_ident!("execute_{}", next_node_name);
-        quote! {
-            {
-                let bclone = branchtracker.clone();
-                let oclone = output.clone();
-                let dclone = std::sync::Arc::clone(&deps);
-                tokio::spawn(async move {
-                    Self::#execute_node(bclone, oclone, dclone).await;
-                });
-            }
-        }
-    }
-
-    fn create_execute_fn(&self, graph_output_type: TokenStream) -> TokenStream;
-
-    fn get_execute_ident(&self) -> Ident {
-        format_ident!("execute_{}", self.get_name())
-    }
-
-    fn get_nodetype_ident(&self) -> Ident {
-        format_ident!("{}", self.get_nodetype())
-    }
-
-    fn create_spawn_blocks(&self) -> TokenStream {
-        if self.is_terminating_node() {
-            branchtracker_remove_branch()
-        } else {
-            self.create_tail()
-        }
-    }
-}
-
+#[derive(Clone)]
 pub struct Node {
     name: String,
     nodetype: String,
     destinations: Vec<String>,
-}
-impl BaseNode for Node {
-    fn get_name(&self) -> &String {
-        &self.name
-    }
-
-    fn get_nodetype(&self) -> &String {
-        &self.nodetype
-    }
-
-    fn is_terminating_node(&self) -> bool {
-        self.destinations.is_empty()
-    }
-
-    fn create_tail(&self) -> TokenStream {
-        let mut out = TokenStream::new();
-        let mut needs_add_branch = false;
-        for dest in self.destinations.iter() {
-            if needs_add_branch {
-                out.extend(branchtracker_add_branch())
-            }
-            out.extend(Self::create_spawn_block(&dest));
-            needs_add_branch = true;
-        }
-        out
-    }
-
-    fn create_execute_fn(&self, graph_output_type: TokenStream) -> TokenStream {
-        let node_type = self.get_nodetype_ident();
-        let execute_node = self.get_execute_ident();
-        let spawn_blocks = self.create_spawn_blocks();
-        quote!{
-            #[async_recursion::async_recursion]
-            async fn #execute_node(
-                branchtracker: std::sync::Arc<tokio::sync::Mutex<conflagrate::BranchTracker<#graph_output_type>>>,
-                node_args: <#node_type as conflagrate::NodeType>::Args,
-                deps: std::sync::Arc<conflagrate::DependencyCache>
-            ) {
-                let output = <#node_type as conflagrate::NodeType>::run(node_args, &deps).await;
-                #spawn_blocks
-            }
-        }
-    }
 }
 impl Node {
     fn new(name: &String, nodetype: &String) -> Node {
@@ -119,14 +26,11 @@ impl Node {
     fn add_destination(&mut self, destination: &String) {
         self.destinations.push(destination.clone());
     }
-}
 
-pub struct MatcherNode {
-    name: String,
-    nodetype: String,
-    destinations: HashMap<String, String>,
-}
-impl BaseNode for MatcherNode {
+    fn get_destinations(&self) -> Vec<String> {
+        self.destinations.clone()
+    }
+
     fn get_name(&self) -> &String {
         &self.name
     }
@@ -138,32 +42,13 @@ impl BaseNode for MatcherNode {
     fn is_terminating_node(&self) -> bool {
         self.destinations.is_empty()
     }
+}
 
-    fn create_tail(&self) -> TokenStream {
-        let match_blocks = self.create_match_blocks();
-        quote! {
-            match value.as_str() {
-                #match_blocks
-            }
-        }
-    }
-
-    fn create_execute_fn(&self, graph_output_type: TokenStream) -> TokenStream {
-        let node_type = self.get_nodetype_ident();
-        let execute_node = self.get_execute_ident();
-        let spawn_blocks = self.create_spawn_blocks();
-        quote!{
-            #[async_recursion::async_recursion]
-            async fn #execute_node(
-                branchtracker: std::sync::Arc<tokio::sync::Mutex<conflagrate::BranchTracker<#graph_output_type>>>,
-                node_args: <#node_type as conflagrate::NodeType>::Args,
-                deps: std::sync::Arc<conflagrate::DependencyCache>
-            ) {
-                let (value, output) = <#node_type as conflagrate::NodeType>::run(node_args, &deps).await;
-                #spawn_blocks
-            }
-        }
-    }
+#[derive(Clone)]
+pub struct MatcherNode {
+    name: String,
+    nodetype: String,
+    destinations: HashMap<String, String>,
 }
 impl MatcherNode {
     fn new(name: &String, nodetype: &String) -> MatcherNode {
@@ -174,94 +59,166 @@ impl MatcherNode {
         }
     }
 
-    fn create_match_block(value: &String, spawn_block: &TokenStream) -> TokenStream {
-        quote!{
-            #value => #spawn_block,
+    fn add_destination(&mut self, value: &String, destination: &String) {
+        self.destinations.insert(value.clone(), destination.clone());
+    }
+
+    fn get_destinations(&self) -> HashMap<String, String> {
+        self.destinations.clone()
+    }
+
+    fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    fn get_nodetype(&self) -> &String {
+        &self.nodetype
+    }
+
+    fn is_terminating_node(&self) -> bool {
+        self.destinations.is_empty()
+    }
+}
+
+#[derive(Clone)]
+pub struct ResultDestinations {
+    ok: Vec<String>,
+    err: Vec<String>,
+}
+impl ResultDestinations {
+    pub fn new() -> Self {
+        Self {
+            ok: Vec::<String>::new(),
+            err: Vec::<String>::new(),
         }
     }
 
-    fn create_match_blocks(&self) -> TokenStream {
-        let mut out = TokenStream::new();
-        for (value, node_name) in self.destinations.iter() {
-            if value == DEFAULT_MATCH_VALUE {
-                continue;
-            } else {
-                out.extend(Self::create_match_block(
-                    value,
-                    &Self::create_spawn_block(node_name)
-                ))
-            }
-        }
-        out.extend(self.create_default_match());
-        out
+    pub fn get_ok_nodes(&self) -> Vec<String> {
+        self.ok.clone()
     }
 
-    fn create_default_match(&self) -> TokenStream {
-        match self.destinations.get("") {
-            Some(node_name) => {
-                let spawn_block = Self::create_spawn_block(node_name);
-                quote!{
-                    _ => #spawn_block
-                }
-            },
-            None => {
-                let remove_branch = branchtracker_remove_branch();
-                quote!{
-                    _ => #remove_branch
-                }
-            }
+    pub fn get_err_nodes(&self) -> Vec<String> {
+        self.err.clone()
+    }
+
+    pub fn len(&self) -> usize {
+        self.err.len() + self.ok.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+#[derive(Clone)]
+pub struct ResultMatcherNode {
+    name: String,
+    nodetype: String,
+    destinations: ResultDestinations,
+}
+impl ResultMatcherNode {
+    fn new(name: &String, nodetype: &String) -> Self {
+        Self {
+            name: name.clone(),
+            nodetype: nodetype.clone(),
+            destinations: ResultDestinations::new(),
         }
     }
 
     fn add_destination(&mut self, value: &String, destination: &String) {
-        self.destinations.insert(value.clone(), destination.clone());
+        let value_lower = value.to_lowercase();
+        match value_lower.as_str() {
+            RESULT_MATCHER_OK_VAL => self.destinations.ok.push(destination.clone()),
+            RESULT_MATCHER_ERR_VAL => self.destinations.err.push(destination.clone()),
+            _ => panic!("Result matcher node only supports ok and err edge values")
+        }
+    }
+
+    fn get_destinations(&self) -> ResultDestinations {
+        self.destinations.clone()
+    }
+
+    fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    fn get_nodetype(&self) -> &String {
+        &self.nodetype
+    }
+
+    fn is_terminating_node(&self) -> bool {
+        self.destinations.ok.is_empty() && self.destinations.err.is_empty()
     }
 }
 
+pub enum Branches {
+    Parallel(Vec<String>),
+    Match(HashMap<String, String>),
+    ResultMatch(ResultDestinations),
+}
+
+#[derive(Clone)]
 pub enum Nodes {
     Node(Node),
     MatcherNode(MatcherNode),
+    ResultMatcherNode(ResultMatcherNode),
 }
 impl Nodes {
     pub fn is_terminating_node(&self) -> bool {
         match self {
             Self::Node(node) => node.is_terminating_node(),
-            Self::MatcherNode(node) => node.is_terminating_node()
+            Self::MatcherNode(node) => node.is_terminating_node(),
+            Self::ResultMatcherNode(node) => node.is_terminating_node(),
+        }
+    }
+
+    pub fn node_returns_matcher_value(&self) -> bool {
+        match self {
+            Self::Node(_) => false,
+            Self::MatcherNode(_) => true,
+            Self::ResultMatcherNode(_) => false,
         }
     }
 
     pub fn add_destination(&mut self, value: &String, destination: &String) {
         match self {
             Self::Node(node) => node.add_destination(destination),
-            Self::MatcherNode(node) => node.add_destination(value, destination)
+            Self::MatcherNode(node) => node.add_destination(value, destination),
+            Self::ResultMatcherNode(node) => node.add_destination(value, destination),
         }
     }
 
     pub fn get_nodetype_ident(&self) -> Ident {
         match self {
-            Self::Node(node) => node.get_nodetype_ident(),
-            Self::MatcherNode(node) => node.get_nodetype_ident()
-        }
-    }
-
-    pub fn get_execute_ident(&self) -> Ident {
-        match self {
-            Self::Node(node) => node.get_execute_ident(),
-            Self::MatcherNode(node) => node.get_execute_ident()
-        }
-    }
-
-    pub fn create_execute_fn(&self, graph_output_type: TokenStream) -> TokenStream {
-        match self {
-            Self::Node(node) => node.create_execute_fn(graph_output_type),
-            Self::MatcherNode(node) => node.create_execute_fn(graph_output_type)
+            Self::Node(node) => format_ident!("{}", node.get_nodetype()),
+            Self::MatcherNode(node) => format_ident!("{}", node.get_nodetype()),
+            Self::ResultMatcherNode(node) => format_ident!("{}", node.get_nodetype()),
         }
     }
 
     pub fn new_node(name: &String, nodetype: &String, branch: &String) -> Self {
         match branch.as_str() {
             NODE_BRANCH_MATCHER_VAL => Self::MatcherNode(MatcherNode::new(&name, &nodetype)),
+            NODE_BRANCH_RESULT_MATCHER_VAL => Self::ResultMatcherNode(
+                ResultMatcherNode::new(&name, &nodetype)
+            ),
             _ => Self::Node(Node::new(&name, &nodetype))
+        }
+    }
+
+    pub fn get_name(&self) -> &String {
+        match self {
+            Self::Node(node) => node.get_name(),
+            Self::MatcherNode(node) => node.get_name(),
+            Self::ResultMatcherNode(node) => node.get_name(),
+        }
+    }
+
+    pub fn get_destinations(&self) -> Branches {
+        match self {
+            Self::Node(node) => Branches::Parallel(node.get_destinations()),
+            Self::MatcherNode(node) => Branches::Match(node.get_destinations()),
+            Self::ResultMatcherNode(node) => Branches::ResultMatch(node.get_destinations())
         }
     }
 }

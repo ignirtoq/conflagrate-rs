@@ -1,7 +1,7 @@
 use crate::graph::node::Nodes;
 use std::collections::HashMap;
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 
 use dot_structures::{Attribute, Edge as GvEdge, EdgeTy, Graph as GvGraph, Id, Node as GvNode, Stmt, Vertex};
 
@@ -10,27 +10,35 @@ const NODE_BRANCH_ATTR: &str = "branch";
 const NODE_START_ATTR: &str = "start";
 const EDGE_VALUE_ATTR: &str = "value";
 
-pub struct Graph {
+/// The parsed graph structure of the application.
+///
+/// A DescriptiveGraph contains the data extracted from parsing the raw string provided to the
+/// `graph` macro.  It needs to be passed into the `ExecutableGraph` to be converted into Rust
+/// source code that can be compiled and executed.
+pub struct DescriptiveGraph {
     name: String,
     nodes: HashMap<String, Nodes>,
     start_node: String,
+    source: String,
 }
-impl Graph {
-    pub fn from(raw_source: &String) -> Graph {
+impl DescriptiveGraph {
+    pub fn from(raw_source: &String) -> DescriptiveGraph {
         let gv_graph = match graphviz_rust::parse(&raw_source) {
             Ok(g) => g,
             Err(_) => panic!("unable to parse graph")
         };
-        let mut graph = Graph::new(&get_graph_name(&gv_graph));
+        let mut graph = DescriptiveGraph::new(&get_graph_name(&gv_graph));
+        graph.source = raw_source.clone();
         graph.process_graph(gv_graph);
         graph
     }
 
-    fn new(name: &String) -> Graph {
-        Graph {
+    fn new(name: &String) -> DescriptiveGraph {
+        DescriptiveGraph {
             name: name.clone(),
             nodes: HashMap::<String, Nodes>::new(),
-            start_node: String::new()
+            start_node: String::new(),
+            source: String::new(),
         }
     }
 
@@ -106,7 +114,7 @@ impl Graph {
         }
     }
 
-    fn get_output_type(&self) -> TokenStream {
+    pub fn get_output_type(&self) -> TokenStream {
         let mut output_type: Option<Ident> = None;
         for val in self.nodes.values() {
             if val.is_terminating_node() {
@@ -123,14 +131,14 @@ impl Graph {
         self.nodes.get(&self.start_node)
     }
 
-    fn get_start_node_execute_ident(&self) -> Ident {
+    pub fn get_start_node_name(&self) -> &String {
         match self.get_start_node() {
-            Some(node) => node.get_execute_ident(),
+            Some(node) => node.get_name(),
             None => panic!("No starting node found!  Give one node the attribute 'start'.")
         }
     }
 
-    fn get_start_node_nodetype(&self) -> TokenStream {
+    pub fn get_start_node_nodetype(&self) -> TokenStream {
         match self.get_start_node() {
             Some(start_node) => {
                 let start_node_nodetype = start_node.get_nodetype_ident();
@@ -140,56 +148,16 @@ impl Graph {
         }
     }
 
-    fn get_execute_node_blocks(&self) -> TokenStream {
-        let mut out = TokenStream::new();
-        for node in self.nodes.values() {
-            out.extend(node.create_execute_fn(self.get_output_type()))
-        }
-        out
-    }
-}
-impl ToTokens for Graph {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let graph_output_type = self.get_output_type();
-        let graph_name = format_ident!("{}", &self.name);
-        let start_node_nodetype = self.get_start_node_nodetype();
-        let execute_start_node = self.get_start_node_execute_ident();
-        let execute_node_blocks = self.get_execute_node_blocks();
-        tokens.extend(quote! {
-
-pub struct #graph_name{}
-impl #graph_name {
-    pub fn run(
-        first_node_args: <#start_node_nodetype as conflagrate::NodeType>::Args
-    ) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        match rt.block_on(async move {
-            Self::run_graph(first_node_args, None).await
-        }) {
-            _ => {}
-        };
+    pub fn get_name(&self) -> Ident {
+        format_ident!("{}", &self.name)
     }
 
-    pub async fn run_graph(
-        first_node_args: <#start_node_nodetype as conflagrate::NodeType>::Args,
-        dependency_cache: Option<std::sync::Arc<conflagrate::DependencyCache>>
-    ) -> Result<#graph_output_type, tokio::sync::oneshot::error::RecvError>{
-        let (receiver, raw_branch_tracker) = conflagrate::BranchTracker::<#graph_output_type>::new();
-        let branch_tracker = std::sync::Arc::new(tokio::sync::Mutex::new(raw_branch_tracker));
-        let deps = match dependency_cache {
-            Some(deps) => deps,
-            None => std::sync::Arc::new(conflagrate::DependencyCache::new()),
-        };
-        tokio::spawn(async move {
-            Self::#execute_start_node(branch_tracker, first_node_args, deps).await;
-        });
-        receiver.await
+    pub fn get_nodes(&self) -> &HashMap<String, Nodes> {
+        &self.nodes
     }
 
-    #execute_node_blocks
-}
-
-        })
+    pub fn into_source(self) -> String {
+        self.source
     }
 }
 

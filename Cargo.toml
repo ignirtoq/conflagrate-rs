@@ -1,6 +1,6 @@
 [package]
 name = "conflagrate"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Jeffrey Bouas <ignirtoq@gmail.com>"]
 edition = "2018"
 description = "A framework for building applications from control flow graphs"
@@ -15,5 +15,5 @@ exclude = ["/src/bin/**"]
 [dependencies]
 async-recursion = "1.0.0"
 async-trait = ">=0.1.52"
-conflagrate-macros = { version = "=0.0.2", path = "./macros" }
+conflagrate-macros = { version = "=0.0.3", path = "./macros" }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync"] }

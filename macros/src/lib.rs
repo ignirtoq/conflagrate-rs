@@ -96,6 +96,86 @@ pub fn dependency(_: TokenStream, func: TokenStream) -> TokenStream {
 /// and the output of the node is the input of the next node in the graph (or the return value of
 /// the graph).
 ///
+/// ```no_run
+/// # use std::collections::VecDeque;
+/// # use conflagrate::nodetype;
+/// #[nodetype]
+/// async fn SplitCommand(input: String) -> VecDeque<String> {
+///     input.split_whitespace().map(String::from).collect::<VecDeque<String>>()
+/// }
+/// ```
+///
+/// # Branching Behavior
+///
+/// In a graph, when one node has more than one arrow following it pointing to different nodes,
+/// then the graph has "branched".  Branches in control flow graphs can have multiple,
+/// contradictory meanings.  In some cases, we may use branches to show conditional execution: if
+/// some condition is satisfied, follow one branch, otherwise follow another.  In other cases
+/// branching may represent parallel execution: at this point in the application, spawn N tasks
+/// and copy the data to each task.
+///
+/// To cover these possibilities, conflagrate supports tagging the nodes in a graph with a
+/// `branch` attribute to specify what the node's branching behavior should be (see [`graph`:
+/// Node Attributes](graph#node-attributes)).  Some choices of branching behavior require a
+/// `nodetype`'s output to be structured a certain way.
+///
+/// ## Parallel
+///
+/// The default branching behavior is simply to spawn a separate task for each following node in
+/// parallel.  The output from the branching node is cloned to each trailing node.
+///
+/// Parallel branching puts no constraints on the return type of the node, other than the usual
+/// requirement that each following node must accept exactly the same number and types as their
+/// input.
+///
+/// ## Matcher
+///
+/// If a node is given the `branch=matcher` attribute in the graph definition, it is specified to
+/// have the `matcher` branching behavior, where conflagrate executes only one trailing node
+/// determined by the output of the matcher node.  This puts a constraint on the form of the
+/// output of the node.
+///
+/// The return type of the node is required to be a 2-tuple of the form `(String, T)`, where the
+/// String first element is used for matching and the `T` second element is passed to the next node
+/// as its input.  Edges tagged with the `value` attribute (see
+/// [`graph`: Edge Attributes](graph#edge-attributes)) are matched using the attribute's value,
+/// and a matching edge determines the following node.  If no matches are found, an edge without a
+/// `value` attribute is used as the default. If no default edge is provided, the graph will
+/// terminate, using the matcher node's output as its output.
+///
+/// ```
+/// # use std::collections::VecDeque;
+/// # use conflagrate::nodetype;
+/// #[nodetype]
+/// async fn GetCommand(input: VecDeque<String>) -> (String, VecDeque<String>) {
+///     let cmd = input.pop_front().unwrap_or(String::from(""));
+///     (cmd, input)
+/// }
+/// ```
+///
+/// ## Result Matcher
+///
+/// Like the matcher behavior, if a node is described with the `branch=resultmatcher` attribute,
+/// the choice of trailing nodes depends on the output of the node.  In this case, the return
+/// type must be a single [`Result<T, E>`](core::result).  Edges marked with the `value=ok`
+/// attribute will match against the `Ok(T)` variant and receive `T` as their input type, and edges
+/// with `value=err` will match `Err(E)` and receive `E` as their input type.  Unlike
+/// the regular matcher type, multiple trailing nodes can be labeled with either `value=ok` or
+/// `value=err` on their edges, allowing for parallel execution as in the default parallel
+/// branching behavior.
+///
+/// ```
+/// # use std::collections::VecDeque;
+/// # use conflagrate::nodetype;
+/// #[nodetype]
+/// async fn GetCommand(input: VecDeque<String>) -> Result<(String, VecDeque<String>), String> {
+///     match input.pop_front() {
+///         Ok(cmd) => Ok((cmd, input)),
+///         Err(e) => Err(format!("unable to get command from input: {}", e.to_string())),
+///     }
+/// }
+/// ```
+///
 /// # Blocking Versus Non-Blocking
 ///
 /// Conflagrate applications are built using `tokio`, so `nodetype`s are converted to async
@@ -116,7 +196,7 @@ pub fn dependency(_: TokenStream, func: TokenStream) -> TokenStream {
 /// provides the function with a uniform call signature so that when it's used with the
 /// [`graph`](macro@graph) macro, the graph builder doesn't need to know anything about the shape of
 /// your function.  This makes testing more difficult, so your original function is also provided as
-/// a `test` method. The `test` method has exactly the same call signature as the original
+/// a `test` static method. The `test` method has exactly the same call signature as the original
 /// definition.
 ///
 /// ```
@@ -147,6 +227,15 @@ pub fn dependency(_: TokenStream, func: TokenStream) -> TokenStream {
 /// ```
 ///
 /// # Examples
+///
+/// ## Hello World
+///
+/// A simple "hello world" graph with two nodes, `get_name` and `print_name`.  These nodes have
+/// the `nodetype`s `GetName` and `PrintGreeting`, respectively.  The graph starts at `get_name`
+/// and then follows to `print_name`.  The `GetName` `nodetype` returns a `String`, so the
+/// `nodetype` of the node that follows, `PrintGreeting` for `print_name`, must take as its input
+/// just a `String` (plus an dependencies, but in this case there are none).
+///
 /// ```no_run
 /// # use conflagrate::{graph, nodetype};
 /// #[nodetype]
@@ -201,18 +290,20 @@ pub fn nodetype(_: TokenStream, func: TokenStream) -> TokenStream {
 ///
 /// * `type` -- The [`nodetype`](macro@nodetype) associated with the node the in graph, which is a
 /// block of executable code that takes as input the output from the previous node and provides as
-/// output the input to the next node.
+/// output the input to the next node.  Multiple nodes in the graph can use the same `nodetype`
+/// to facillitate more code reuse.
 /// * `start` -- Labels the node to start the graph from.  Only one node may be labeled with the
 /// `start` attribute.
 /// * `branch` -- Tells conflagrate how to handle a node that has more than one node trailing it in
 /// the graph.  May take the following values:
 ///     * `parallel` (default) -- Conflagrate executes all trailing nodes simultaneously in
 /// parallel.  The return value from the node is cloned and passed separately to each tail.  If
-/// the `branch` attributed is omitted, this value is assumed.
-///     * `matcher` -- Conflagrate executes only one trailing node.  The choice of node depends on
-/// the value returned by the `nodetype` function.  Edges tagged with the `value` attribute (see
-/// below) are matched against the returned value, and a matching edge determines the following
-/// node.  If no matches are found, the edge without a `value` attribute is used as the default.
+/// the `branch` attribute is omitted, this value is assumed.
+///     * `matcher` -- Conflagrate executes only one trailing node determined by the output of
+/// the matcher node.  This puts constraints on the required return type of the `nodetype` (see
+/// [`nodetype`: Matcher](nodetype#matcher)).
+///     * `resultmatcher` -- A variant of `matcher` that matches on a `Result` instead of a
+/// `String` (see [`nodetype`: Result Matcher](nodetype#result-matcher)).
 ///
 /// # Edge Attributes
 ///
