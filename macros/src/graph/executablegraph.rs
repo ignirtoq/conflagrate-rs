@@ -1,6 +1,8 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
+use std::collections::HashMap;
 use crate::graph::descriptivegraph::DescriptiveGraph;
+use crate::graph::node::{Branches, Nodes};
 use crate::graph::task::{Task, TaskName};
 
 /// The execution organized and optimized representation of the control flow graph.
@@ -25,19 +27,43 @@ pub struct ExecutableGraph {
     tasks: Vec<Task>,
     source: String,
 }
-impl From<DescriptiveGraph> for ExecutableGraph {
-    fn from(graph: DescriptiveGraph) -> Self {
+impl ExecutableGraph {
+    fn build_tasks(graph: &DescriptiveGraph) -> Vec<Task> {
         let graph_output_type = graph.get_output_type();
         let graph_nodes_map = graph.get_nodes();
         let mut tasks = Vec::<Task>::with_capacity(graph_nodes_map.len());
         for (_, node) in graph_nodes_map {
-            tasks.push(Task::from_nodes(&[node.clone()], &graph_output_type));
+            let mut task_nodes = Vec::<Nodes>::new();
+            Self::collect_nodes_for_task(&node, &mut task_nodes, graph_nodes_map);
+            tasks.push(Task::from_nodes(&task_nodes, &graph_output_type));
         }
+        tasks
+    }
+
+    fn collect_nodes_for_task(
+        this_node: &Nodes,
+        nodes: &mut Vec<Nodes>,
+        graph_nodes_map: &HashMap<String, Nodes>
+    ) {
+        nodes.push(this_node.clone());
+        // Look at the node type and its destinations to decide if we should recurse.
+        if let Nodes::Node(_) = this_node {
+            if let Branches::Parallel(destinations) = this_node.get_destinations() {
+                if destinations.len() == 1 {
+                    let next_node = graph_nodes_map.get(destinations.first().unwrap());
+                    Self::collect_nodes_for_task(next_node.unwrap(), nodes, graph_nodes_map);
+                }
+            }
+        }
+    }
+}
+impl From<DescriptiveGraph> for ExecutableGraph {
+    fn from(graph: DescriptiveGraph) -> Self {
         Self {
             name: graph.get_name(),
             run_method: RunMethod::from(&graph),
             run_graph_method: RunGraphMethod::from(&graph),
-            tasks,
+            tasks: Self::build_tasks(&graph),
             source: graph.into_source(),
         }
     }

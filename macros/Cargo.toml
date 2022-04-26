@@ -1,6 +1,6 @@
 [package]
 name = "conflagrate-macros"
-version = "0.0.3"
+version = "0.1.0"
 authors = ["Jeffrey Bouas <ignirtoq@gmail.com>"]
 edition = "2018"
 description = "Macros for conflagrate"
